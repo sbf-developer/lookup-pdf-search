@@ -2,7 +2,13 @@
 
 A fast desktop app for searching a textbook and slide PDFs during an exam.
 
-Double-click `run.bat`. The first launch installs what it needs. After that it opens straight away.
+## Download
+
+The Windows app runs on 64-bit Windows 10 and Windows 11. Download **Lookup-Windows.zip** from the [releases page](https://github.com/sbf-developer/pdf-search/releases), unzip it, and open `Lookup.exe`.
+
+Windows may say it protected your PC the first time, because the app is not signed. Choose More info, then Run anyway.
+
+To run it from this folder instead, double-click `run.bat`. The first launch installs what it needs. After that it opens straight away.
 
 Add PDFs with **Add PDFs**, or drop them on the window. The last files reopen next time.
 

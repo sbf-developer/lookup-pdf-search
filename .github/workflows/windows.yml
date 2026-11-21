@@ -1,0 +1,25 @@
+name: Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -r requirements.txt pyinstaller
+      - name: Icon
+        run: python packaging/make_icon.py
+      - name: Build
+        run: pyinstaller packaging/lookup.spec --noconfirm --clean
+      - name: Zip
+        run: Compress-Archive -Path dist\Lookup\* -DestinationPath Lookup-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lookup-Windows
+          path: Lookup-Windows.zip
