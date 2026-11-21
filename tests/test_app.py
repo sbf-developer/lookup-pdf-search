@@ -16,6 +16,17 @@ from pdflookup.window import MainWindow
 import pymupdf as fitz
 
 
+def _slides(folder: Path) -> Path:
+    path = folder / "slides.pdf"
+    src = fitz.open()
+    page = src.new_page()
+    page.insert_text((72, 90), "Cloud platforms host the class data set.", fontsize=12)
+    page.insert_text((72, 120), "Nothing here is about mining.", fontsize=12)
+    src.save(path)
+    src.close()
+    return path
+
+
 def _pdf(folder: Path) -> Path:
     path = folder / "lecture.pdf"
     src = fitz.open()
@@ -62,6 +73,49 @@ class AppTests(unittest.TestCase):
             self.assertTrue(window.viewer.canvas.pixmap() is not None)
             self.assertFalse(window.viewer.canvas.pixmap().isNull())
             self._assert_highlight_on_words(window)
+            window.viewer.zoom_in()
+            window.viewer.zoom_in()
+            self.app.processEvents()
+            self.assertGreater(window.viewer.holder.height(), window.viewer.scroll.viewport().height())
+            bar = window.viewer.scroll.verticalScrollBar()
+            bar.setValue(0)
+            window.viewer._scroll_by(0, -160, False)
+            self.assertGreater(bar.value(), 0)
+            window.viewer.close_all()
+            window.close()
+
+    def test_all_and_each_pdf_filter_the_results(self):
+        with tempfile.TemporaryDirectory() as folder:
+            notes = _pdf(Path(folder))
+            slides = _slides(Path(folder))
+            window = MainWindow()
+            window.show()
+            window.add_paths([str(notes), str(slides)])
+            deadline = time.time() + 8
+            while time.time() < deadline and len(window.docs) < 2:
+                self.app.processEvents()
+                time.sleep(0.02)
+            self.app.processEvents()
+            self.assertEqual(len(window.docs), 2)
+            window.broad_btn.setChecked(True)
+            window.search.setText("data")
+            notes_index = next(index for index, doc in enumerate(window.docs) if doc.name == "lecture.pdf")
+            slides_index = next(index for index, doc in enumerate(window.docs) if doc.name == "slides.pdf")
+            window._on_chip(10_000)
+            self.app.processEvents()
+            names = {window._searched[match.doc_index].doc.name for match in window.matches}
+            self.assertIn("lecture.pdf", names)
+            self.assertIn("slides.pdf", names)
+            window._on_chip(slides_index)
+            self.app.processEvents()
+            self.assertTrue(window.matches)
+            self.assertTrue(all(window._searched[match.doc_index].doc.name == "slides.pdf" for match in window.matches))
+            self.assertEqual(Path(window.viewer.path).name, "slides.pdf")
+            window._on_chip(notes_index)
+            self.app.processEvents()
+            self.assertTrue(all(window._searched[match.doc_index].doc.name == "lecture.pdf" for match in window.matches))
+            self.assertEqual(Path(window.viewer.path).name, "lecture.pdf")
+            window.viewer.close_all()
             window.close()
 
     def _assert_highlight_on_words(self, window):

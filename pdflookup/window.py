@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSlider,
     QSplitter,
     QStatusBar,
@@ -37,6 +38,9 @@ from pdflookup.search import Match, Prepared, prepare, preview_text, search
 from pdflookup.style import LIGHT, Theme, stylesheet, theme_for
 from pdflookup.textutil import tokenize
 from pdflookup.view import PageView, ResultDelegate, ResultList, make_logo
+
+
+_ALL_DOCS = 10_000
 
 
 def _session_file() -> Path:
@@ -232,9 +236,21 @@ class MainWindow(QMainWindow):
         header.addStretch(1)
         header.addWidget(self.count_label)
         left.addLayout(header)
-        self.chip_row = QHBoxLayout()
+        self.chip_host = QWidget()
+        self.chip_host.setObjectName("chipHost")
+        self.chip_row = QHBoxLayout(self.chip_host)
+        self.chip_row.setContentsMargins(0, 0, 0, 0)
         self.chip_row.setSpacing(2)
-        left.addLayout(self.chip_row)
+        self.chip_scroll = QScrollArea()
+        self.chip_scroll.setObjectName("chips")
+        self.chip_scroll.setWidget(self.chip_host)
+        self.chip_scroll.setWidgetResizable(False)
+        self.chip_scroll.setFrameShape(QFrame.NoFrame)
+        self.chip_scroll.setFixedHeight(36)
+        self.chip_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.chip_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.chip_scroll.viewport().setAutoFillBackground(False)
+        left.addWidget(self.chip_scroll)
         self.results = ResultList()
         self.results.setObjectName("results")
         self.delegate = ResultDelegate(self.results)
@@ -535,7 +551,7 @@ class MainWindow(QMainWindow):
         all_btn.setCheckable(True)
         all_btn.setFocusPolicy(Qt.NoFocus)
         all_btn.setCursor(Qt.PointingHandCursor)
-        group.addButton(all_btn, -1)
+        group.addButton(all_btn, _ALL_DOCS)
         self.chip_row.addWidget(all_btn)
         selected = all_btn
         for index, doc in enumerate(self.docs):
@@ -551,7 +567,7 @@ class MainWindow(QMainWindow):
             close = QPushButton("×")
             close.setObjectName("chipX")
             close.setFocusPolicy(Qt.NoFocus)
-            close.setFixedWidth(18)
+            close.setFixedSize(22, 28)
             close.setCursor(Qt.PointingHandCursor)
             close.setToolTip(f"Remove {doc.name}")
             close.clicked.connect(lambda _checked=False, path=doc.path: self.remove_path(path))
@@ -567,17 +583,24 @@ class MainWindow(QMainWindow):
         group.blockSignals(False)
         group.idClicked.connect(self._on_chip)
         self.chip_row.addStretch(1)
+        self.chip_host.adjustSize()
+        self.chip_scroll.setWidget(self.chip_host)
         self._enable_drops(self)
 
     def _on_chip(self, button_id: int):
-        if button_id < 0 or button_id >= len(self.docs):
+        if button_id == _ALL_DOCS:
             self.active_path = None
-        else:
-            self.active_path = self.docs[button_id].path
-            doc = self.docs[button_id]
-            if doc.page_count and not self.search.text().strip():
-                self.viewer.show_document(doc, 0, [], scroll=False)
+            self._run_search()
+            return
+        if button_id < 0 or button_id >= len(self.docs):
+            return
+        doc = self.docs[button_id]
+        self.active_path = doc.path
         self._run_search()
+        if self.search.text().strip() and self.matches:
+            return
+        if doc.page_count:
+            self.viewer.show_document(doc, self.viewer.page if self.viewer.path == doc.path else 0, [], scroll=False)
 
     def _visible_prepared(self) -> list[Prepared]:
         if not self.active_path:

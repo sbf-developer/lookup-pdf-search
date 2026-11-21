@@ -178,11 +178,16 @@ class PageView(QWidget):
 
         self.scroll = QScrollArea()
         self.scroll.setObjectName("pageScroll")
-        self.scroll.setWidgetResizable(True)
+        self.scroll.setWidgetResizable(False)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll.setFrameShape(QFrame.NoFrame)
         self.scroll.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         self.scroll.setWidget(self.holder)
-        self.scroll.viewport().installEventFilter(self)
+        self._pan = None
+        for widget in (self.scroll.viewport(), self.holder, self.canvas):
+            widget.installEventFilter(self)
+        self.canvas.setCursor(Qt.OpenHandCursor)
 
         self.stack = QStackedWidget()
         self.stack.addWidget(self.empty)
@@ -331,15 +336,55 @@ class PageView(QWidget):
         super().resizeEvent(event)
         if self.fit and self.path:
             self._fit_timer.start(40)
+        elif self.path:
+            self._place_page()
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.Wheel and event.modifiers() & Qt.ControlModifier:
-            if event.angleDelta().y() > 0:
-                self.zoom_in()
-            else:
-                self.zoom_out()
+        if event.type() == QEvent.Wheel:
+            if event.modifiers() & Qt.ControlModifier:
+                if event.angleDelta().y() > 0:
+                    self.zoom_in()
+                elif event.angleDelta().y() < 0:
+                    self.zoom_out()
+                return True
+            self._scroll_by(event.angleDelta().x(), event.angleDelta().y(), bool(event.modifiers() & Qt.ShiftModifier))
+            return True
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            self._pan = (
+                event.globalPosition().toPoint(),
+                self.scroll.verticalScrollBar().value(),
+                self.scroll.horizontalScrollBar().value(),
+            )
+            self.canvas.setCursor(Qt.ClosedHandCursor)
+            return True
+        if event.type() == QEvent.MouseMove and self._pan is not None:
+            origin, vertical, horizontal = self._pan
+            delta = event.globalPosition().toPoint() - origin
+            self.scroll.verticalScrollBar().setValue(vertical - delta.y())
+            self.scroll.horizontalScrollBar().setValue(horizontal - delta.x())
+            return True
+        if event.type() == QEvent.MouseButtonRelease and self._pan is not None:
+            self._pan = None
+            self.canvas.setCursor(Qt.OpenHandCursor)
             return True
         return super().eventFilter(obj, event)
+
+    def _scroll_by(self, dx: int, dy: int, shift: bool):
+        if shift and dy and not dx:
+            dx, dy = dy, 0
+        if dy:
+            bar = self.scroll.verticalScrollBar()
+            bar.setValue(bar.value() - dy)
+        if dx:
+            bar = self.scroll.horizontalScrollBar()
+            bar.setValue(bar.value() - dx)
+
+    def _place_page(self):
+        margins = self.holder.layout().contentsMargins()
+        content_width = self.canvas.width() + margins.left() + margins.right()
+        content_height = self.canvas.height() + margins.top() + margins.bottom()
+        viewport = self.scroll.viewport().size()
+        self.holder.resize(max(content_width, viewport.width()), max(content_height, viewport.height()))
 
     def _current_scale(self) -> float:
         if not self.page_sizes:
@@ -375,6 +420,7 @@ class PageView(QWidget):
         dpr = image.devicePixelRatio() or 1
         self.canvas.setPixmap(QPixmap.fromImage(image))
         self.canvas.setFixedSize(int(image.width() / dpr), int(image.height() / dpr))
+        self._place_page()
         self._update_footer()
         if self._scroll_to_hit:
             QTimer.singleShot(0, self._scroll_hit)

@@ -192,7 +192,8 @@ QPushButton#chip {{
     color: {theme.soft};
     border: 1px solid transparent;
     border-radius: 6px;
-    padding: 3px 8px;
+    padding: 0 8px;
+    min-height: 28px;
 }}
 QPushButton#chip:checked {{
     background: {theme.select};
@@ -207,6 +208,11 @@ QPushButton#chipX {{
     font-size: 14px;
 }}
 QPushButton#chipX:hover {{ color: {theme.text}; }}
+
+QScrollArea#chips, #chipHost {{
+    background: transparent;
+    border: none;
+}}
 
 QListWidget#results {{
     background: {theme.panel};
