@@ -129,7 +129,9 @@ class MainWindow(QMainWindow):
         self.word_distance = 8
         self.show_results = True
         self.show_lookup = True
-        self._panel_sizes = [420, 620, 380]
+        self.results_side = "left"
+        self.lookup_side = "right"
+        self._widths = {"results": 420, "viewer": 620, "lookup": 380}
 
         self._build()
         self._shortcuts()
@@ -810,19 +812,73 @@ class MainWindow(QMainWindow):
         else:
             self._idle_sidebar()
 
+    def _capture_widths(self):
+        names = {
+            self.results_panel: "results",
+            self.viewer: "viewer",
+            self.read_panel: "lookup",
+        }
+        sizes = [int(value) for value in self.splitter.sizes()]
+        for index, size in enumerate(sizes):
+            widget = self.splitter.widget(index)
+            if widget in names and size > 0 and widget.isVisible():
+                self._widths[names[widget]] = size
+
+    def _panel_order(self) -> list:
+        left = []
+        right = []
+        (left if self.results_side == "left" else right).append(self.results_panel)
+        (left if self.lookup_side == "left" else right).append(self.read_panel)
+        if len(left) == 2:
+            left = [self.results_panel, self.read_panel]
+        if len(right) == 2:
+            right = [self.read_panel, self.results_panel]
+        return left + [self.viewer] + right
+
+    def _apply_layout(self):
+        order = self._panel_order()
+        for index, widget in enumerate(order):
+            self.splitter.insertWidget(index, widget)
+            self.splitter.setStretchFactor(index, 1 if widget is self.viewer else 0)
+        self.results_panel.setVisible(self.show_results)
+        self.read_panel.setVisible(self.show_lookup)
+        names = {
+            self.results_panel: "results",
+            self.viewer: "viewer",
+            self.read_panel: "lookup",
+        }
+        viewer_width = self._widths["viewer"]
+        if not self.show_results:
+            viewer_width += self._widths["results"]
+        if not self.show_lookup:
+            viewer_width += self._widths["lookup"]
+        sizes = []
+        for widget in order:
+            if widget is self.viewer:
+                sizes.append(viewer_width)
+            elif widget.isVisible():
+                sizes.append(self._widths[names[widget]])
+            else:
+                sizes.append(0)
+        self.splitter.setSizes(sizes)
+
     def set_panels(self, results: bool | None = None, lookup: bool | None = None, save: bool = True):
-        if self.results_panel.isVisible() and self.read_panel.isVisible():
-            sizes = [int(value) for value in self.splitter.sizes()]
-            if len(sizes) == 3 and all(value > 0 for value in sizes):
-                self._panel_sizes = sizes
+        self._capture_widths()
         if results is not None:
             self.show_results = bool(results)
         if lookup is not None:
             self.show_lookup = bool(lookup)
-        self.results_panel.setVisible(self.show_results)
-        self.read_panel.setVisible(self.show_lookup)
-        if self.show_results and self.show_lookup:
-            self.splitter.setSizes(self._panel_sizes)
+        self._apply_layout()
+        if save:
+            self._save_session()
+
+    def set_sides(self, results: str | None = None, lookup: str | None = None, save: bool = True):
+        self._capture_widths()
+        if results in ("left", "right"):
+            self.results_side = results
+        if lookup in ("left", "right"):
+            self.lookup_side = lookup
+        self._apply_layout()
         if save:
             self._save_session()
 
@@ -843,11 +899,22 @@ class MainWindow(QMainWindow):
             self.show_results = data["show_results"]
         if isinstance(data.get("show_lookup"), bool):
             self.show_lookup = data["show_lookup"]
+        if data.get("results_side") in ("left", "right"):
+            self.results_side = data["results_side"]
+        if data.get("lookup_side") in ("left", "right"):
+            self.lookup_side = data["lookup_side"]
         self.set_theme("dark" if data.get("theme") == "dark" else "light", save=False)
-        sizes = data.get("splitter")
-        if isinstance(sizes, list) and len(sizes) == 3 and all(isinstance(value, int) and value > 0 for value in sizes):
-            self._panel_sizes = [int(value) for value in sizes]
-        self.set_panels(save=False)
+        widths = data.get("panel_widths")
+        if isinstance(widths, dict):
+            for key in ("results", "viewer", "lookup"):
+                value = widths.get(key)
+                if isinstance(value, int) and value > 0:
+                    self._widths[key] = value
+        else:
+            sizes = data.get("splitter")
+            if isinstance(sizes, list) and len(sizes) == 3 and all(isinstance(value, int) and value > 0 for value in sizes):
+                self._widths = {"results": int(sizes[0]), "viewer": int(sizes[1]), "lookup": int(sizes[2])}
+        self._apply_layout()
         geometry = data.get("geometry")
         if geometry:
             try:
@@ -864,10 +931,7 @@ class MainWindow(QMainWindow):
     def _save_session(self):
         if self._closing and not self.known and not self.docs:
             return
-        if self.show_results and self.show_lookup:
-            sizes = [int(value) for value in self.splitter.sizes()]
-            if len(sizes) == 3 and all(value > 0 for value in sizes):
-                self._panel_sizes = sizes
+        self._capture_widths()
         geometry = bytes(self.saveGeometry().toHex()).decode("ascii")
         _write_session(
             {
@@ -878,9 +942,12 @@ class MainWindow(QMainWindow):
                 "word_distance": self.word_distance,
                 "show_results": self.show_results,
                 "show_lookup": self.show_lookup,
+                "results_side": self.results_side,
+                "lookup_side": self.lookup_side,
+                "panel_widths": dict(self._widths),
                 "directory": self.last_dir,
                 "geometry": geometry,
-                "splitter": list(self._panel_sizes),
+                "splitter": [self._widths["results"], self._widths["viewer"], self._widths["lookup"]],
             }
         )
 
@@ -1060,9 +1127,11 @@ class SettingsDialog(QDialog):
         self.lookup_box.setChecked(window.show_lookup)
         self.results_box.toggled.connect(lambda on: self.window.set_panels(results=on))
         self.lookup_box.toggled.connect(lambda on: self.window.set_panels(lookup=on))
-        root.addWidget(self.results_box)
-        root.addWidget(self.lookup_box)
-        panels_hint = QLabel("Hide the results list, the lookup text, or both. Search and the page stay.")
+        self.results_side = self._side_switch(window.results_side, lambda side: self.window.set_sides(results=side))
+        self.lookup_side = self._side_switch(window.lookup_side, lambda side: self.window.set_sides(lookup=side))
+        root.addLayout(self._panel_row(self.results_box, self.results_side))
+        root.addLayout(self._panel_row(self.lookup_box, self.lookup_side))
+        panels_hint = QLabel("Show each panel, and choose which side of the page it sits on.")
         panels_hint.setObjectName("muted")
         panels_hint.setWordWrap(True)
         root.addWidget(panels_hint)
@@ -1082,7 +1151,7 @@ class SettingsDialog(QDialog):
         self.preview.valueChanged.connect(self._on_preview)
         root.addWidget(self.preview)
         root.addWidget(self.preview_value)
-        hint = QLabel("How much of the hit, and the sentence after it, shows in each result and in the panel on the right.")
+        hint = QLabel("How much of the hit, and the sentence after it, shows in each result and in the lookup panel.")
         hint.setObjectName("muted")
         hint.setWordWrap(True)
         root.addWidget(hint)
@@ -1107,6 +1176,38 @@ class SettingsDialog(QDialog):
         distance_hint.setWordWrap(True)
         root.addWidget(distance_hint)
         self._sync_labels()
+
+    def _panel_row(self, box: QCheckBox, switch: QFrame) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(12)
+        row.addWidget(box, 1)
+        row.addWidget(switch)
+        return row
+
+    def _side_switch(self, side: str, on_side) -> QFrame:
+        switch = QFrame()
+        switch.setObjectName("modeSwitch")
+        switch.setFixedSize(148, 32)
+        row = QHBoxLayout(switch)
+        row.setContentsMargins(3, 3, 3, 3)
+        row.setSpacing(2)
+        left = QPushButton("Left")
+        right = QPushButton("Right")
+        for button in (left, right):
+            button.setCheckable(True)
+            button.setFixedHeight(26)
+            button.setFocusPolicy(Qt.NoFocus)
+            button.setCursor(Qt.PointingHandCursor)
+            row.addWidget(button)
+        left.setChecked(side != "right")
+        right.setChecked(side == "right")
+        group = QButtonGroup(switch)
+        group.setExclusive(True)
+        group.addButton(left, 0)
+        group.addButton(right, 1)
+        group.idClicked.connect(lambda button_id: on_side("right" if button_id == 1 else "left"))
+        return switch
 
     def _sync_labels(self):
         chars = self.preview.value()

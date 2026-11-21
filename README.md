@@ -4,7 +4,7 @@ A fast desktop app for searching a textbook and slide PDFs during an exam.
 
 ## Download
 
-`Lookup-Windows.zip` is the Windows app, version 1.1.0. It runs on 64-bit Windows 10 and Windows 11. Download it from the [releases page](https://github.com/sbf-developer/lookup-pdf-search/releases), unzip it, and open `Lookup.exe`.
+`Lookup-Windows.zip` is the Windows app, version 1.2.0. It runs on 64-bit Windows 10 and Windows 11. Download it from the [releases page](https://github.com/sbf-developer/lookup-pdf-search/releases), unzip it, and open `Lookup.exe`.
 
 Windows may say it protected your PC the first time, because the app is not signed. Choose More info, then Run anyway.
 
