@@ -31,30 +31,25 @@ RENDER_BOOST = 2.0
 _CACHE_LIMIT = 8
 
 
-def make_logo(size: int = 32) -> QPixmap:
+def make_logo(size: int = 32, *, on_dark: bool = False) -> QPixmap:
+    """Black squircle and a white corner. Inverted on a dark bar so it stays visible."""
+    background = QColor("#f2f2f2" if on_dark else "#141414")
+    foreground = QColor("#141414" if on_dark else "#ffffff")
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.Antialiasing, True)
     painter.setPen(Qt.NoPen)
-    painter.setBrush(QColor("#3c6df0"))
-    radius = size * 0.28
+    painter.setBrush(background)
+    radius = max(2.0, size * 0.22)
     painter.drawRoundedRect(QRectF(0, 0, size, size), radius, radius)
-    pen = QPen(QColor("#ffffff"))
-    pen.setWidthF(max(1.5, size * 0.09))
-    pen.setCapStyle(Qt.RoundCap)
-    painter.setPen(pen)
-    painter.setBrush(Qt.NoBrush)
-    glass = size * 0.40
-    origin_x = size * 0.22
-    origin_y = size * 0.18
-    painter.drawEllipse(QRectF(origin_x, origin_y, glass, glass))
-    painter.drawLine(
-        int(origin_x + glass * 0.76),
-        int(origin_y + glass * 0.76),
-        int(origin_x + glass * 1.28),
-        int(origin_y + glass * 1.28),
-    )
+    arm = max(2.0, round(size * 0.16))
+    span = max(arm * 2.2, round(size * 0.44))
+    left = (size - span) / 2
+    top = (size - span) / 2
+    painter.setBrush(foreground)
+    painter.drawRect(QRectF(left, top, arm, span))
+    painter.drawRect(QRectF(left, top + span - arm, span, arm))
     painter.end()
     return pixmap
 
@@ -198,8 +193,8 @@ class PageView(QWidget):
         self.footer.setObjectName("footer")
         self.footer.setFixedHeight(40)
         footer = QHBoxLayout(self.footer)
-        footer.setContentsMargins(8, 0, 8, 0)
-        footer.setSpacing(2)
+        footer.setContentsMargins(10, 0, 10, 0)
+        footer.setSpacing(4)
         self.prev_btn = self._tool("‹", "Previous page")
         self.next_btn = self._tool("›", "Next page")
         self.page_label = QLabel("No page")
@@ -240,6 +235,9 @@ class PageView(QWidget):
         button.setFocusPolicy(Qt.NoFocus)
         button.setToolTip(tip)
         button.setCursor(Qt.PointingHandCursor)
+        button.setFixedHeight(28)
+        if len(text) <= 1:
+            button.setFixedWidth(28)
         return button
 
     def set_theme(self, theme: Theme):

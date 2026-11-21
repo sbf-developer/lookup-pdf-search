@@ -11,6 +11,7 @@ from PySide6.QtGui import QColor, QFont, QIcon, QKeySequence, QPalette, QShortcu
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
+    QCheckBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -126,6 +127,9 @@ class MainWindow(QMainWindow):
         self.theme: Theme = LIGHT
         self.preview_chars = 220
         self.word_distance = 8
+        self.show_results = True
+        self.show_lookup = True
+        self._panel_sizes = [420, 620, 380]
 
         self._build()
         self._shortcuts()
@@ -141,23 +145,26 @@ class MainWindow(QMainWindow):
 
         top = QWidget()
         top.setObjectName("topBar")
-        top.setFixedHeight(52)
+        top.setFixedHeight(48)
         bar = QHBoxLayout(top)
-        bar.setContentsMargins(14, 8, 14, 8)
-        bar.setSpacing(10)
+        bar.setContentsMargins(12, 0, 12, 0)
+        bar.setSpacing(8)
         self._logo = QIcon()
         for size in (16, 20, 24, 32, 48):
             self._logo.addPixmap(make_logo(size))
         self.setWindowIcon(self._logo)
-        logo = QLabel()
-        logo.setObjectName("logo")
-        mark = make_logo(44)
-        mark.setDevicePixelRatio(2)
-        logo.setPixmap(mark)
-        logo.setFixedSize(22, 22)
-        logo.setStyleSheet("background: transparent;")
+        self.logo_label = QLabel()
+        self.logo_label.setObjectName("logo")
+        self.logo_label.setFixedSize(20, 20)
         brand = QLabel("Lookup")
         brand.setObjectName("brand")
+        identity = QWidget()
+        identity.setObjectName("identity")
+        identity_row = QHBoxLayout(identity)
+        identity_row.setContentsMargins(0, 0, 0, 0)
+        identity_row.setSpacing(7)
+        identity_row.addWidget(self.logo_label)
+        identity_row.addWidget(brand)
         self.search = QLineEdit()
         self.search.setObjectName("search")
         self.search.setPlaceholderText("Search words or a sentence")
@@ -165,12 +172,14 @@ class MainWindow(QMainWindow):
         mode = QFrame()
         mode.setObjectName("modeSwitch")
         mode_row = QHBoxLayout(mode)
-        mode_row.setContentsMargins(2, 2, 2, 2)
+        mode.setFixedHeight(32)
+        mode_row.setContentsMargins(3, 3, 3, 3)
         mode_row.setSpacing(2)
         self.exact_btn = QPushButton("Exact")
         self.broad_btn = QPushButton("Broad")
         for button in (self.exact_btn, self.broad_btn):
             button.setCheckable(True)
+            button.setFixedHeight(26)
             button.setFocusPolicy(Qt.NoFocus)
             button.setCursor(Qt.PointingHandCursor)
             mode_row.addWidget(button)
@@ -182,16 +191,19 @@ class MainWindow(QMainWindow):
         self.mode_group.idClicked.connect(lambda _id: self._on_mode())
         self.add_btn = QPushButton("Add PDFs")
         self.add_btn.setObjectName("addButton")
+        self.add_btn.setFixedHeight(32)
         self.add_btn.setFocusPolicy(Qt.NoFocus)
         self.add_btn.setCursor(Qt.PointingHandCursor)
         self.add_btn.clicked.connect(self.open_files)
         self.settings_btn = QPushButton("Settings")
         self.settings_btn.setObjectName("settingsButton")
+        self.settings_btn.setFixedHeight(32)
         self.settings_btn.setFocusPolicy(Qt.NoFocus)
         self.settings_btn.setCursor(Qt.PointingHandCursor)
         self.settings_btn.clicked.connect(self.open_settings)
-        bar.addWidget(logo)
-        bar.addWidget(brand)
+        self.search.setFixedHeight(32)
+        bar.addWidget(identity)
+        bar.addSpacing(4)
         bar.addWidget(self.search, 1)
         bar.addWidget(mode)
         bar.addWidget(self.settings_btn)
@@ -203,6 +215,7 @@ class MainWindow(QMainWindow):
         self.splitter.setHandleWidth(1)
 
         results_panel = QWidget()
+        self.results_panel = results_panel
         results_panel.setObjectName("resultsPanel")
         results_panel.setMinimumWidth(300)
         left = QVBoxLayout(results_panel)
@@ -239,6 +252,7 @@ class MainWindow(QMainWindow):
         self.viewer.navigated.connect(self._on_page_nav)
 
         read_panel = QWidget()
+        self.read_panel = read_panel
         read_panel.setObjectName("readPanel")
         read_panel.setMinimumWidth(280)
         right = QVBoxLayout(read_panel)
@@ -719,7 +733,7 @@ class MainWindow(QMainWindow):
         self.found_label.setText("Search")
         self.echo_label.setText("A word, a sentence, or something you only half remember.")
         if self.broad_btn.isChecked():
-            mode = "Broad is on. Words can sit near each other in either order, and close wordings count, so ERP and cloud both match, and data mining finds data mine."
+            mode = "Broad is on. Words can sit near each other in either order, and close wordings count."
         else:
             mode = "Exact is on. The words must appear in the order you typed, within the distance set in Settings."
         self.reader.setHtml(
@@ -743,6 +757,11 @@ class MainWindow(QMainWindow):
         label = "PDF" if count == 1 else "PDFs"
         self.statusBar().showMessage(f"{count} {label}    {words:,} words    Up/Down hits    Ctrl+B mode    Ctrl+O add")
 
+    def _apply_logo(self):
+        mark = make_logo(40, on_dark=self.theme.dark)
+        mark.setDevicePixelRatio(2)
+        self.logo_label.setPixmap(mark)
+
     def set_theme(self, name: str, save: bool = True):
         self.theme = theme_for(name)
         app = QApplication.instance()
@@ -751,6 +770,7 @@ class MainWindow(QMainWindow):
             app.setWindowIcon(QIcon(self._logo))
         self.delegate.set_theme(self.theme)
         self.viewer.set_theme(self.theme)
+        self._apply_logo()
         palette = self.reader.palette()
         palette.setColor(QPalette.ColorRole.Base, QColor(self.theme.reader_bg))
         palette.setColor(QPalette.ColorRole.Text, QColor(self.theme.text))
@@ -790,6 +810,22 @@ class MainWindow(QMainWindow):
         else:
             self._idle_sidebar()
 
+    def set_panels(self, results: bool | None = None, lookup: bool | None = None, save: bool = True):
+        if self.results_panel.isVisible() and self.read_panel.isVisible():
+            sizes = [int(value) for value in self.splitter.sizes()]
+            if len(sizes) == 3 and all(value > 0 for value in sizes):
+                self._panel_sizes = sizes
+        if results is not None:
+            self.show_results = bool(results)
+        if lookup is not None:
+            self.show_lookup = bool(lookup)
+        self.results_panel.setVisible(self.show_results)
+        self.read_panel.setVisible(self.show_lookup)
+        if self.show_results and self.show_lookup:
+            self.splitter.setSizes(self._panel_sizes)
+        if save:
+            self._save_session()
+
     def _restore(self):
         data = _load_session()
         self.last_dir = data.get("directory") or ""
@@ -803,10 +839,15 @@ class MainWindow(QMainWindow):
         distance = data.get("word_distance")
         if isinstance(distance, int):
             self.word_distance = max(0, min(20, distance))
+        if isinstance(data.get("show_results"), bool):
+            self.show_results = data["show_results"]
+        if isinstance(data.get("show_lookup"), bool):
+            self.show_lookup = data["show_lookup"]
         self.set_theme("dark" if data.get("theme") == "dark" else "light", save=False)
         sizes = data.get("splitter")
-        if isinstance(sizes, list) and len(sizes) == 3 and all(isinstance(value, int) for value in sizes):
-            self.splitter.setSizes(sizes)
+        if isinstance(sizes, list) and len(sizes) == 3 and all(isinstance(value, int) and value > 0 for value in sizes):
+            self._panel_sizes = [int(value) for value in sizes]
+        self.set_panels(save=False)
         geometry = data.get("geometry")
         if geometry:
             try:
@@ -823,6 +864,10 @@ class MainWindow(QMainWindow):
     def _save_session(self):
         if self._closing and not self.known and not self.docs:
             return
+        if self.show_results and self.show_lookup:
+            sizes = [int(value) for value in self.splitter.sizes()]
+            if len(sizes) == 3 and all(value > 0 for value in sizes):
+                self._panel_sizes = sizes
         geometry = bytes(self.saveGeometry().toHex()).decode("ascii")
         _write_session(
             {
@@ -831,9 +876,11 @@ class MainWindow(QMainWindow):
                 "theme": self.theme.name,
                 "preview_chars": self.preview_chars,
                 "word_distance": self.word_distance,
+                "show_results": self.show_results,
+                "show_lookup": self.show_lookup,
                 "directory": self.last_dir,
                 "geometry": geometry,
-                "splitter": [int(value) for value in self.splitter.sizes()],
+                "splitter": list(self._panel_sizes),
             }
         )
 
@@ -982,13 +1029,15 @@ class SettingsDialog(QDialog):
         root.addWidget(appearance)
         switch = QFrame()
         switch.setObjectName("modeSwitch")
+        switch.setFixedHeight(32)
         row = QHBoxLayout(switch)
-        row.setContentsMargins(2, 2, 2, 2)
+        row.setContentsMargins(3, 3, 3, 3)
         row.setSpacing(2)
         self.light_btn = QPushButton("Light")
         self.dark_btn = QPushButton("Dark")
         for button in (self.light_btn, self.dark_btn):
             button.setCheckable(True)
+            button.setFixedHeight(26)
             button.setFocusPolicy(Qt.NoFocus)
             button.setCursor(Qt.PointingHandCursor)
             row.addWidget(button)
@@ -1001,6 +1050,23 @@ class SettingsDialog(QDialog):
         group.idClicked.connect(self._on_theme)
         root.addWidget(switch)
 
+        panels = QLabel("PANELS")
+        panels.setObjectName("kicker")
+        root.addSpacing(14)
+        root.addWidget(panels)
+        self.results_box = QCheckBox("Results")
+        self.lookup_box = QCheckBox("Lookup")
+        self.results_box.setChecked(window.show_results)
+        self.lookup_box.setChecked(window.show_lookup)
+        self.results_box.toggled.connect(lambda on: self.window.set_panels(results=on))
+        self.lookup_box.toggled.connect(lambda on: self.window.set_panels(lookup=on))
+        root.addWidget(self.results_box)
+        root.addWidget(self.lookup_box)
+        panels_hint = QLabel("Hide the results list, the lookup text, or both. Search and the page stay.")
+        panels_hint.setObjectName("muted")
+        panels_hint.setWordWrap(True)
+        root.addWidget(panels_hint)
+
         preview_kicker = QLabel("RESULT PREVIEW")
         preview_kicker.setObjectName("kicker")
         root.addSpacing(14)
@@ -1012,6 +1078,7 @@ class SettingsDialog(QDialog):
         self.preview.setSingleStep(10)
         self.preview.setPageStep(20)
         self.preview.setValue(window.preview_chars)
+        self.preview.setFixedHeight(28)
         self.preview.valueChanged.connect(self._on_preview)
         root.addWidget(self.preview)
         root.addWidget(self.preview_value)
@@ -1029,6 +1096,7 @@ class SettingsDialog(QDialog):
         self.distance = QSlider(Qt.Horizontal)
         self.distance.setRange(0, 20)
         self.distance.setValue(window.word_distance)
+        self.distance.setFixedHeight(28)
         self.distance.valueChanged.connect(self._on_distance)
         root.addWidget(self.distance)
         root.addWidget(self.distance_value)

@@ -116,12 +116,12 @@ QWidget {{
 QMainWindow, #topBar {{ background: {theme.bg}; }}
 #topBar {{ border-bottom: 1px solid {theme.border}; }}
 
+#identity, #logo, #brand {{ background: transparent; }}
 #brand {{
     color: {theme.found};
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 600;
-    background: transparent;
-    padding: 0;
+    padding: 0 2px 0 0;
 }}
 
 QLineEdit#search {{
@@ -130,10 +130,9 @@ QLineEdit#search {{
     border-radius: 8px;
     padding: 0 12px;
     color: {theme.text};
-    font-size: 14px;
+    font-size: 13px;
     selection-background-color: #2f4f86;
     selection-color: #ffffff;
-    min-height: 34px;
 }}
 QLineEdit#search:focus {{ border-color: #3c6df0; }}
 QLineEdit#search::placeholder {{ color: {theme.placeholder}; }}
@@ -147,9 +146,8 @@ QLineEdit#search::placeholder {{ color: {theme.placeholder}; }}
     color: {theme.muted};
     border: none;
     border-radius: 6px;
-    padding: 4px 12px;
-    min-height: 26px;
-    min-width: 58px;
+    padding: 0 12px;
+    font-size: 13px;
 }}
 #modeSwitch QPushButton:checked {{
     background: {theme.mode_on};
@@ -162,8 +160,8 @@ QPushButton#addButton, QPushButton#settingsButton {{
     color: {theme.text};
     border: 1px solid {theme.button_border};
     border-radius: 8px;
-    padding: 4px 12px;
-    min-height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
 }}
 QPushButton#addButton:hover, QPushButton#settingsButton:hover {{ background: {theme.hover}; }}
 
@@ -239,8 +237,8 @@ QPushButton#tool {{
     color: {theme.soft};
     border: none;
     border-radius: 6px;
-    padding: 4px 8px;
-    min-width: 28px;
+    padding: 0 8px;
+    font-size: 13px;
 }}
 QPushButton#tool:hover {{ background: {theme.hover}; color: {theme.text}; }}
 QPushButton#tool:checked {{ background: {theme.select}; color: {theme.text}; }}
@@ -277,16 +275,29 @@ QDialog#settings QLabel#muted {{
     color: {theme.muted};
     background: transparent;
 }}
+QDialog#settings QCheckBox {{
+    background: transparent;
+    spacing: 8px;
+    font-size: 13px;
+    padding: 2px 0;
+}}
 QSlider::groove:horizontal {{
     height: 4px;
+    margin: 0 8px;
     background: {theme.border};
     border-radius: 2px;
 }}
 QSlider::handle:horizontal {{
-    width: 14px;
+    width: 16px;
+    height: 16px;
     margin: -6px 0;
     background: #3c6df0;
-    border-radius: 7px;
+    border-radius: 8px;
+}}
+QDialog#settings QSlider {{
+    min-height: 28px;
+    max-height: 28px;
+    background: transparent;
 }}
 
 QToolTip {{
