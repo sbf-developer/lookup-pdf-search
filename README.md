@@ -1,8 +1,8 @@
 # Lookup
 
 A fast desktop app for searching a textbook and slide PDFs during an exam.
+<img width="1360" height="699" alt="image" src="https://github.com/user-attachments/assets/28d8c3ba-31d6-4e7e-b2c6-2637c9b10b20" />
 
-![Lookup searching a PDF](docs/preview.png)
 
 ## Download
 
