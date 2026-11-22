@@ -6,7 +6,7 @@ A fast desktop app for searching a textbook and slide PDFs during an exam.
 
 ## Download
 
-`Lookup-Windows.zip` is the Windows app, version 1.2.0. It runs on 64-bit Windows 10 and Windows 11. Download it from the [releases page](https://github.com/sbf-developer/lookup-pdf-search/releases), unzip it, and open `Lookup.exe`.
+`Lookup-Windows.zip` is the Windows app, version 1.3.0. It runs on 64-bit Windows 10 and Windows 11. Download it from the [releases page](https://github.com/sbf-developer/lookup-pdf-search/releases), unzip it, and open `Lookup.exe`.
 
 Windows may say it protected your PC the first time, because the app is not signed. Choose More info, then Run anyway.
 
@@ -16,11 +16,11 @@ Add PDFs with **Add PDFs**, or drop them on the window. The last files reopen ne
 
 ## Search
 
-Type in the bar. Results update as you type. Arrow keys move through hits: the page jumps to the words, and the right panel shows the hit plus the sentences that follow it.
+Type in the bar. Results update as you type, including halfway through a word: `balanced scoreca` finds `balanced scorecard`. Arrow keys move through hits: the page jumps to the words, and the right panel shows the hit plus the sentences that follow it.
 
 **Broad** is the default. It also finds close wording, so `data mining` matches `data mine`, light typos, and words that sound similar.
 
-**Exact** finds the words in order, as written. Ctrl+B switches mode.
+**Exact** finds the words in the order you typed. Ctrl+B switches mode.
 
 ## Keys
 

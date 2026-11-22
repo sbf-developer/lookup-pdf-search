@@ -37,6 +37,7 @@ class Prepared:
     doc: Document
     postings: dict[str, list[int]]
     norms: dict[str, tuple[str, str]]
+    sorted_norms: tuple[str, ...]
 
 
 @dataclass(slots=True)
@@ -64,7 +65,7 @@ def prepare(doc: Document) -> Prepared:
             continue
         postings.setdefault(word.norm, []).append(index)
         norms.setdefault(word.norm, (word.stem, word.phone))
-    return Prepared(doc=doc, postings=postings, norms=norms)
+    return Prepared(doc=doc, postings=postings, norms=norms, sorted_norms=tuple(sorted(postings)))
 
 
 def _prefix_variant(a: str, b: str) -> bool:
@@ -113,9 +114,51 @@ def _edit_le1(a: str, b: str) -> bool:
     return True
 
 
-def _expand(token: str, vocab: dict[str, tuple[str, str]], broad: bool) -> dict[str, int]:
+def _prefix_quality(token: str, word: str) -> int:
+    """Closer to the full word ranks higher, and always below an exact hit."""
+    return 58 + (32 * len(token) // len(word))
+
+
+def _prefixes_for(token: str, prepared: list[Prepared], allow_when_known: bool) -> dict[str, int]:
+    """Words the typed piece already covers, once it is at least half the word.
+
+    A finished word in the middle of a query stays exact, so `data` does not
+    swallow `database`. The word still being typed, or a piece that is not a
+    word on its own, keeps completing.
+    """
+    if len(token) < 3:
+        return {}
+    if not allow_when_known and any(token in prep.postings for prep in prepared):
+        return {}
+    max_len = len(token) * 2
+    found: dict[str, int] = {}
+    for prep in prepared:
+        words = prep.sorted_norms
+        start = bisect.bisect_left(words, token)
+        for word in words[start:]:
+            if not word.startswith(token):
+                break
+            if word == token or len(word) > max_len:
+                continue
+            found[word] = _prefix_quality(token, word)
+    if len(found) > 24:
+        closest = sorted(found, key=lambda word: (len(word), word))[:24]
+        found = {word: found[word] for word in closest}
+    return found
+
+
+def _expand(
+    token: str,
+    vocab: dict[str, tuple[str, str]],
+    broad: bool,
+    prefixes: dict[str, int] | None = None,
+) -> dict[str, int]:
     if not broad:
-        return {token: 100}
+        found = {token: 100}
+        for word, qual in (prefixes or {}).items():
+            if qual > found.get(word, 0):
+                found[word] = qual
+        return found
     token_stem = stem_token(token)
     token_phone = phonetic_norm(token)
     found: dict[str, int] = {}
@@ -142,6 +185,9 @@ def _expand(token: str, vocab: dict[str, tuple[str, str]], broad: bool) -> dict[
             and _edit_le1(token, word)
         ):
             found[word] = 40
+    for word, qual in (prefixes or {}).items():
+        if qual > found.get(word, 0):
+            found[word] = qual
     return found
 
 
@@ -377,7 +423,11 @@ def search(prepared: list[Prepared], query: str, mode: str, proximity: int | Non
         gap_limit = max(0, proximity)
         near = gap_limit
     vocab = _combined_vocab(prepared)
-    expansions = [_expand(token, vocab, broad) for token in tokens]
+    last = len(tokens) - 1
+    expansions = [
+        _expand(token, vocab, broad, _prefixes_for(token, prepared, index == last))
+        for index, token in enumerate(tokens)
+    ]
     matches: list[Match] = []
     truncated = False
     for doc_index, prep in enumerate(prepared):

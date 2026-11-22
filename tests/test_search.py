@@ -52,6 +52,29 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(phonetic_norm("phone"), phonetic_norm("fone"))
         self.assertNotEqual(phonetic_norm("data"), phonetic_norm("date"))
 
+    def test_half_a_word_finds_the_rest(self):
+        doc = document_from_lines(
+            [
+                "Balanced scorecard method measures outcomes.",
+                "The balanced approach is separate.",
+                "Database design is different.",
+            ]
+        )
+        prepared = [prepare(doc)]
+        for mode in ("exact", "broad"):
+            result = search(prepared, "balanced scoreca", mode)
+            found = [" ".join(doc.words[index].norm for index in match.hits) for match in result.matches]
+            self.assertIn("balanced scorecard", found)
+            self.assertNotIn("balanced approach", found)
+        alone = search(prepared, "scoreca", "exact")
+        self.assertTrue(any(doc.words[match.hits[0]].norm == "scorecard" for match in alone.matches))
+        too_short = search(prepared, "balanced sco", "exact")
+        short_found = [" ".join(doc.words[index].norm for index in match.hits) for match in too_short.matches]
+        self.assertNotIn("balanced scorecard", short_found)
+        finished = search(self.prepared, "data design", "exact")
+        finished_text = [" ".join(self.doc.words[index].norm for index in match.hits) for match in finished.matches]
+        self.assertNotIn("database design", finished_text)
+
     def test_exact_finds_phrase_only(self):
         result = search(self.prepared, "data mining", "exact")
         self.assertEqual(len(result.matches), 1)
@@ -155,9 +178,13 @@ class SearchTests(unittest.TestCase):
     def test_search_stays_fast_on_a_long_text(self):
         line = "Data mining is useful for the data mine and the later summary."
         doc = document_from_lines([line] * 4000)
-        result = search([prepare(doc)], "data mining", "broad")
+        prepared = [prepare(doc)]
+        result = search(prepared, "data mining", "broad")
         self.assertLess(result.elapsed_ms, 250)
         self.assertGreater(len(result.matches), 0)
+        partial = search(prepared, "data mini", "broad")
+        self.assertLess(partial.elapsed_ms, 250)
+        self.assertGreater(len(partial.matches), 0)
 
 
 if __name__ == "__main__":
