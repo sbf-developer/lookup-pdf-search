@@ -114,6 +114,33 @@ def _edit_le1(a: str, b: str) -> bool:
     return True
 
 
+def query_terms(query: str) -> list[tuple[str, bool]]:
+    """Tokens, and whether quotes lock each one to the whole word.
+
+    `"edi"` is only the word edi. `edi` may also sit inside a longer word.
+    An opening quote that is still being typed locks the rest of the query.
+    """
+    text = query.replace("\u201c", '"').replace("\u201d", '"')
+    terms: list[tuple[str, bool]] = []
+    locked = False
+    chunk: list[str] = []
+
+    def flush(whole: bool) -> None:
+        piece = "".join(chunk)
+        chunk.clear()
+        for token in tokenize(piece):
+            terms.append((token, whole))
+
+    for char in text:
+        if char == '"':
+            flush(locked)
+            locked = not locked
+            continue
+        chunk.append(char)
+    flush(locked)
+    return terms
+
+
 def _prefix_quality(token: str, word: str) -> int:
     """Closer to the full word ranks higher, and always below an exact hit."""
     return 58 + (32 * len(token) // len(word))
@@ -147,17 +174,46 @@ def _prefixes_for(token: str, prepared: list[Prepared], allow_when_known: bool) 
     return found
 
 
+def _contain_quality(token: str, word: str) -> int:
+    """Inside a longer word, below a word that actually starts with the query."""
+    return 42 + (16 * len(token) // len(word))
+
+
+def _contains_for(token: str, prepared: list[Prepared]) -> dict[str, int]:
+    """Longer words that contain these letters in order, such as edi inside credit."""
+    if len(token) < 3:
+        return {}
+    found: dict[str, int] = {}
+    for prep in prepared:
+        for word in prep.sorted_norms:
+            if len(word) <= len(token) or token not in word:
+                continue
+            qual = _contain_quality(token, word)
+            if qual > found.get(word, 0):
+                found[word] = qual
+    if len(found) > 48:
+        closest = sorted(found, key=lambda word: (len(word), word))[:48]
+        found = {word: found[word] for word in closest}
+    return found
+
+
+def _merge_extra(found: dict[str, int], extra: dict[str, int] | None) -> None:
+    for word, qual in (extra or {}).items():
+        if qual > found.get(word, 0):
+            found[word] = qual
+
+
 def _expand(
     token: str,
     vocab: dict[str, tuple[str, str]],
     broad: bool,
     prefixes: dict[str, int] | None = None,
+    contained: dict[str, int] | None = None,
 ) -> dict[str, int]:
     if not broad:
         found = {token: 100}
-        for word, qual in (prefixes or {}).items():
-            if qual > found.get(word, 0):
-                found[word] = qual
+        _merge_extra(found, prefixes)
+        _merge_extra(found, contained)
         return found
     token_stem = stem_token(token)
     token_phone = phonetic_norm(token)
@@ -185,9 +241,8 @@ def _expand(
             and _edit_le1(token, word)
         ):
             found[word] = 40
-    for word, qual in (prefixes or {}).items():
-        if qual > found.get(word, 0):
-            found[word] = qual
+    _merge_extra(found, prefixes)
+    _merge_extra(found, contained)
     return found
 
 
@@ -412,8 +467,8 @@ def preview_text(doc: Document, match: Match, limit: int) -> str:
 
 def search(prepared: list[Prepared], query: str, mode: str, proximity: int | None = None) -> SearchHits:
     started = time.perf_counter()
-    tokens = tokenize(query)
-    if not tokens or not prepared:
+    terms = query_terms(query)
+    if not terms or not prepared:
         return SearchHits([], False, 0.0)
     broad = mode == "broad"
     if proximity is None:
@@ -423,11 +478,21 @@ def search(prepared: list[Prepared], query: str, mode: str, proximity: int | Non
         gap_limit = max(0, proximity)
         near = gap_limit
     vocab = _combined_vocab(prepared)
-    last = len(tokens) - 1
-    expansions = [
-        _expand(token, vocab, broad, _prefixes_for(token, prepared, index == last))
-        for index, token in enumerate(tokens)
-    ]
+    last = len(terms) - 1
+    expansions = []
+    for index, (token, whole_word) in enumerate(terms):
+        if whole_word:
+            expansions.append({token: 100})
+            continue
+        expansions.append(
+            _expand(
+                token,
+                vocab,
+                broad,
+                _prefixes_for(token, prepared, index == last),
+                _contains_for(token, prepared),
+            )
+        )
     matches: list[Match] = []
     truncated = False
     for doc_index, prep in enumerate(prepared):

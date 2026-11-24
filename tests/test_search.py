@@ -68,12 +68,57 @@ class SearchTests(unittest.TestCase):
             self.assertNotIn("balanced approach", found)
         alone = search(prepared, "scoreca", "exact")
         self.assertTrue(any(doc.words[match.hits[0]].norm == "scorecard" for match in alone.matches))
-        too_short = search(prepared, "balanced sco", "exact")
+        too_short = search(prepared, "balanced sc", "exact")
         short_found = [" ".join(doc.words[index].norm for index in match.hits) for match in too_short.matches]
         self.assertNotIn("balanced scorecard", short_found)
-        finished = search(self.prepared, "data design", "exact")
-        finished_text = [" ".join(self.doc.words[index].norm for index in match.hits) for match in finished.matches]
-        self.assertNotIn("database design", finished_text)
+        contained = search(self.prepared, "data design", "exact")
+        contained_text = [" ".join(self.doc.words[index].norm for index in match.hits) for match in contained.matches]
+        self.assertIn("database design", contained_text)
+        quoted = search(self.prepared, '"data" design', "exact")
+        quoted_text = [" ".join(self.doc.words[index].norm for index in match.hits) for match in quoted.matches]
+        self.assertNotIn("database design", quoted_text)
+
+    def test_quotes_keep_the_word_and_plain_text_includes_it(self):
+        doc = document_from_lines(
+            [
+                "EDI connects the order system.",
+                "The editor reviews each media credit.",
+                "ERP runs beside the ERPsystem today.",
+                "Enterprise resource planning is broader.",
+            ]
+        )
+        prepared = [prepare(doc)]
+
+        def hit_words(query, mode):
+            words = set()
+            result = search(prepared, query, mode)
+            for match in result.matches:
+                for index in match.hits:
+                    words.add(doc.words[index].norm)
+            return words, result
+
+        for mode in ("exact", "broad"):
+            quoted, quoted_result = hit_words('"edi"', mode)
+            self.assertEqual(quoted, {"edi"})
+            self.assertEqual(doc.words[quoted_result.matches[0].hits[0]].norm, "edi")
+            plain, plain_result = hit_words("edi", mode)
+            self.assertIn("edi", plain)
+            self.assertIn("editor", plain)
+            self.assertIn("media", plain)
+            self.assertIn("credit", plain)
+            self.assertNotIn("enterprise", plain)
+            self.assertEqual(doc.words[plain_result.matches[0].hits[0]].norm, "edi")
+            erp_quoted, _erp_result = hit_words('"ERP"', mode)
+            self.assertEqual(erp_quoted, {"erp"})
+            erp_plain, _erp_plain = hit_words("ERP", mode)
+            self.assertIn("erp", erp_plain)
+            self.assertIn("erpsystem", erp_plain)
+            self.assertIn("enterprise", erp_plain)
+        open_quote, _open_result = hit_words('"edi', "broad")
+        self.assertEqual(open_quote, {"edi"})
+        locked = search(self.prepared, '"mining"', "broad")
+        self.assertTrue(locked.matches)
+        self.assertTrue(all(self.doc.words[match.hits[0]].norm == "mining" for match in locked.matches))
 
     def test_exact_finds_phrase_only(self):
         result = search(self.prepared, "data mining", "exact")

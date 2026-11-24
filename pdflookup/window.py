@@ -763,7 +763,7 @@ class MainWindow(QMainWindow):
             mode = "Exact is on. The words must appear in the order you typed, within the distance set in Settings."
         self.reader.setHtml(
             _note(mode, self.theme)
-            + f"<p style='color:{self.theme.muted}; font-size:13px;'>Arrow keys move through hits. Each result shows a short preview, and this panel follows.</p>"
+            + f"<p style='color:{self.theme.muted}; font-size:13px;'>Quotes match that word only, so \"ERP\" does not match a longer word. Arrow keys move through hits. Each result shows a short preview, and this panel follows.</p>"
         )
         self.source_label.setText("")
 
